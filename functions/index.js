@@ -1,7 +1,44 @@
+require('dotenv').config();
+
 const { onRequest } = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const Alexa = require('ask-sdk-core');
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const admin = require("firebase-admin");
+const axios = require("axios");
 
+admin.initializeApp();
+const db = admin.firestore();
+
+
+exports.pubsub = onSchedule("0 */8 * * *", async (event) => {
+    try {
+        const apiKey = process.env.WEATHER_API_KEY;
+        const city = "Missoula";
+
+        const response = await axios.get(
+            `http://api.weatherstack.com/current?access_key=${apiKey}&query=${city}`
+        );
+
+        const weather = response.data;
+
+        await db.collection("weather").add({
+            location: weather.location.name,
+            region: weather.location.region,
+            country: weather.location.country,
+            temperature: weather.current.temperature,
+            description: weather.current.weather_descriptions[0],
+            humidity: weather.current.humidity,
+            wind_speed: weather.current.wind_speed,
+            feelslike: weather.current.feelslike,
+            timestamp: new Date(),
+        });
+
+        console.log("Weather data saved successfully!");
+    } catch (error) {
+        console.error("Error fetching or saving weather data:", error);
+    }
+});
 
 // LaunchRequestHandler: Greets the user
 const LaunchRequestHandler = {
